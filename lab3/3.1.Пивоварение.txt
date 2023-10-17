@@ -1,0 +1,4 @@
+A-06-20;TereshinDP;2023;21;4
+A-06-20;TereshinDP;2023;25;5
+A-06-20;TereshinDP;2023;19;4
+A-06-20;TereshinDP;2023;25;5
