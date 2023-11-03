@@ -30,6 +30,15 @@ error() {
 	echo -e "${RED}$1${RESET}"
 }
 
+# Проверка на наличие тестов по заданному предмету
+check_if_tests_exist() {
+	if [ ! -f ./$1/tests/TEST-* ]; then
+		error "Ошибка: файлы с тестами не найдены."
+		echo "Проверьте, что в директории ./$1/tests есть файлы TEST-*"
+		exit 1
+	fi
+}
+
 # Функция для выбора варианта из предложенного списка
 list_selection() {
 	# Список вариантов для выбора
@@ -69,6 +78,8 @@ min_retakes_help() {
 	group_list
 }
 
+
+
 # Вывод имени студента с минимальным количеством пересдач
 min_retakes() {
     local group=$1
@@ -93,15 +104,23 @@ min_retakes() {
 	list_selection "$subjects"
 	subject=$(echo "$subjects" | head -n $? | tail -n 1)
 	
-	# Все пересдачи в указанной группе
-    retakes=$(grep "$group" ./$subject/tests/* | grep "2$" | sed "s/.*;\(.*\);.*;.*;.*/\1/g" | sort | uniq -c | sort)
-	# Минимальное количество пересдач в группе
-	min_retakes=$(echo "$retakes" | head -n 1 | sed 's/.*\([0-9]\+\) .*/\1/')
-	# Имена всех студентов с минимальным количеством пересдач
-	students=$(echo "$retakes" | grep "$min_retakes " | sed "s/[^a-zA-Z]*//")
+	# Проверка на наличие тестов по данному предмету
+	check_if_tests_exist $subject
 	
-	echo -e "${BOLD}Студенты с мнимальным количеством пересдач ($min_retakes) в группе $group:${RESET}"
-	echo "$students"
+	# Все пересдачи в указанной группе
+    retakes=$(grep "$group" ./$subject/tests/TEST-* | grep "2$" | sed "s/.*;\(.*\);.*;.*;.*/\1/g" | sort | uniq -c | sort)
+
+	if [ -z "$retakes" ]; then
+		echo "Не найдено студентов с пересдачами."
+	else
+		# Минимальное количество пересдач в группе
+		min_retakes=$(echo "$retakes" | head -n 1 | sed 's/ *\([0-9]\+\) .*/\1/')
+		# Имена всех студентов с минимальным количеством пересдач
+		students=$(echo "$retakes" | grep "$min_retakes " | sed "s/[^a-zA-Z]*//")
+		
+		echo -e "${BOLD}Студенты с мнимальным количеством пересдач ($min_retakes) в группе $group:${RESET}"
+		echo "$students"
+	fi
 }
 
 # Функция для вывода help-сообщения для ключа -s или --sort
@@ -131,10 +150,13 @@ sort_group() {
 	fi
 	
 	# Выбор предмета
-	echo -e "${BOLD}Выберите предмет:${RESET}" 
+	echo -e "${BOLD}Выберите предмет:${RESET}"
 	subjects="$(find . -maxdepth 1 -type d | grep ./ | grep -v students | sed "s/\.\///")"
 	list_selection "$subjects"
 	subject=$(echo "$subjects" | head -n $? | tail -n 1)
+	
+	# Проверка на наличие тестов по данному предмету
+	check_if_tests_exist $subject
 	
 	# Выбор теста
 	echo -e "${BOLD}Список доступных тестов:${RESET}"
