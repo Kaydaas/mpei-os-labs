@@ -32,11 +32,30 @@ error() {
 
 # Проверка на наличие тестов по заданному предмету
 check_if_tests_exist() {
-	if [ ! -f ./$1/tests/TEST-* ]; then
+	if [[ -z $(ls "./$1/tests" | grep TEST-.) ]]; then
 		error "Ошибка: файлы с тестами не найдены."
 		echo "Проверьте, что в директории ./$1/tests есть файлы TEST-*"
 		exit 1
 	fi
+}
+
+# Проверка на соостветствие фамилии шаблону
+check_surname() {
+	if [[ "$1" =~ [^a-zA-Z\-] ]]; then
+		error "Ошибка: Неверный формат фамилии."
+		echo "Фамилия должна содержать только латинские буквы."
+        exit 1
+	fi
+}
+
+# Проверка каждой строки из файла с тестом на соответствие шаблону
+check_tests_template() {
+	for line in $1; do
+		if ! [[ $line =~ ^(A-[0-9][0-9]-[0-9][0-9];[a-zA-Z\-]*;[0-9]*;[0-9];2)$ ]]; then
+			error "Ошибка: Строка '$line' не соответствует шаблону."
+			exit 1
+		fi
+	done
 }
 
 # Функция для выбора варианта из предложенного списка
@@ -107,6 +126,9 @@ min_retakes() {
 	# Проверка на наличие тестов по данному предмету
 	check_if_tests_exist $subject
 	
+	# Проверка каждой строки из файла с тестом на соответствие шаблону
+	check_tests_template "$(grep "$group" ./$subject/tests/TEST-* | grep "2$" | sed "s/.*:\(.*\)/\1/")"
+	
 	# Все пересдачи в указанной группе
     retakes=$(grep "$group" ./$subject/tests/TEST-* | grep "2$" | sed "s/.*;\(.*\);.*;.*;.*/\1/g" | sort | uniq -c | sort)
 
@@ -118,7 +140,7 @@ min_retakes() {
 		# Имена всех студентов с минимальным количеством пересдач
 		students=$(echo "$retakes" | grep "$min_retakes " | sed "s/[^a-zA-Z]*//")
 		
-		echo -e "${BOLD}Студенты с мнимальным количеством пересдач ($min_retakes) в группе $group:${RESET}"
+		echo -e "${BOLD}Студенты с мнимальным количеством пересдач ($min_retakes) по предмету $subject в группе $group:${RESET}"
 		echo "$students"
 	fi
 }
@@ -133,7 +155,7 @@ sort_group_help() {
 
 # Вывод списка группы, упорядоченного по количеству попыток сдачи теста
 sort_group() {
-    local group=$1
+    group=$1
 
 	# Проверка соответствия шаблону группы
 	if ! [[ "$group" =~ ^A-[0-9][1-9]-[0-9][0-9]$ ]]; then
@@ -169,44 +191,45 @@ sort_group() {
 		return 1
 	fi
 	
+	if [[ -z $(grep "$group" ./$subject/tests/TEST-$REPLY) ]]; then
+		echo "Пересдачи в группе $group по тесту TEST-$REPLY не найдены."
+		return 0
+	fi
+	
+	# Проверка каждой строки из файла с тестом на соответствие шаблону
+	check_tests_template "$(grep "$group" ./$subject/tests/TEST-$REPLY | grep "2$" | sed "s/.*:\(.*\)/\1/")"
+	
 	# Все пересдачи в указанной группе
-    group_list=$(grep "$group" ./$subject/tests/TEST-$REPLY | sed "s/.*;\(.*\);.*;.*;.*/\1/g" | sort | uniq -c | sort | sed "s/^[[:space:]]*//")
+	group_list=$(grep "$group" ./$subject/tests/TEST-$REPLY | sed "s/.*;\(.*\);.*;.*;.*/\1/g" | sort | uniq -c | sort | sed "s/^[[:space:]]*//")
 	
 	echo "$group_list"
 }
 
 # Функция для вывода help-сообщения для ключа -m или --missed
 missed_help() {
-	echo "Вывод по фамилии студента его досье; его удаление по подтверждению пользователя."
-	echo -e "${BOLD}Использование:${RESET} $0 -d <${ITALIC}ФАМИЛИЯ СТУДЕНТА${RESET}>"
+	echo "Вывод по фамилии студента номеров пропущенных занятий."
+	echo -e "${BOLD}Использование:${RESET} $0 -m <${ITALIC}ФАМИЛИЯ СТУДЕНТА${RESET}>"
 }
 
 # Вывод по фамилии студента номеров пропущенных занятий
 missed() {
-    local surname=$1
+    surname=$1
 	
-	# Если в фамилии есть посторонние символы
-	if [[ "$surname" =~ [^a-zA-Z] ]]; then
-		error "Ошибка: Неверный формат фамилии."
-		echo "Фамилия должна содержать только латинские буквы."
-        return 1
-	fi
+	check_surname $surname
 	
 	#Список студентов, найденных по данной фамилии
 	students=$(grep -r "$surname" ./students/groups/ | sed "s/.*\(A-[0-9][0-9]-[0-9][0-9]\):\([a-zA-Z]*\)/\1 \2/")
-	students_number=$(echo "$students" | wc -l)
-	
-	if (( $students_number == 0 )); then
+
+	if [[ -z $students ]]; then
 		# Если нет студентов с такой фамилией
 		error "Ошибка: студент $surname не найден."
 		return 1
-	elif (( $students_number > 1 )); then
+	elif (( $(echo "$students" | wc -l) > 1 )); then
 		echo -e "${BOLD}Найдено несколько студентов:${RESET}"
 
 		# Выбор из нескольких найденных студентов
 		list_selection "$students"
 		students=$(echo "$students" | head -n $? | tail -n 1)
-	
 	else
 		student=$(echo $students)
 	fi
@@ -220,7 +243,29 @@ missed() {
 	list_selection "$subjects"
 	subject=$(echo "$subjects" | head -n $? | tail -n 1)
 
+	# Отсутствие файла с посещаемостью
+	if ! [[ -f ./$subject/${group}-attendance ]]; then
+		error "Файл с посещаемостью отсутствует: ./$subject/${group}-attendance"
+		return 1
+	fi
+
 	student_attendance=$(grep "$surname" ./$subject/${group}-attendance | sed "s/.* //")
+	
+	# В файле есть искомая фамилия, но информация о пропусках отсутствует
+	if [[ -z $student_attendance ]]; then
+		error "Ошибка: информации о пропусках не найдено."
+		return 1
+	fi
+	
+	# Если пропуски отсутствуют
+	if ! [[ $student_attendance == *"0"* ]]; then
+		echo -e -n "${BOLD}У студента $surname из группы $group отсутствуют пропущенные занятия.${RESET} "
+		return 0
+	# Если все пропущены
+	elif ! [[ $student_attendance == *"1"* ]]; then
+		echo -e -n "${BOLD}У студента $surname из группы $group пропущены все занятия.${RESET} "
+		return 0
+	fi
 	
 	echo -e -n "${BOLD}Номера пропущеных занятий студента $surname из группы $group:${RESET} "
 	for ((i=0; i<${#student_attendance}; i++)); do
@@ -232,20 +277,15 @@ missed() {
 
 # Функция для вывода help-сообщения для ключа -d или --dossier
 dossier_help() {
-	echo "Вывод по фамилии студента номеров пропущенных занятий."
-	echo -e "${BOLD}Использование:${RESET} $0 -m <${ITALIC}ФАМИЛИЯ СТУДЕНТА${RESET}>"
+	echo "Вывод по фамилии студента его досье; его удаление по подтверждению пользователя."
+	echo -e "${BOLD}Использование:${RESET} $0 -d <${ITALIC}ФАМИЛИЯ СТУДЕНТА${RESET}>"
 }
 
 # Вывод по фамилии студента его досье; его удаление по подтверждению пользователя
 dossier() {
-    local surname=$1
+    surname=$1
 	
-	# Если в фамилии есть посторонние символы
-	if [[ "$surname" =~ [^a-zA-Z] ]]; then
-		error "Ошибка: неверный формат фамилии."
-		echo "Фамилия должна содержать только латинские буквы."
-        return 1
-	fi
+	check_surname $surname
 	
 	filepath="./students/general/notes/${surname:0:1}Names.log"
 	
@@ -255,7 +295,7 @@ dossier() {
 		
 		# Если нет студентов с такой фамилией
 		if (( matches == 0 )); then
-			echo "Студент $surname не найден."
+			echo "По фамилии $surname не найдено ни одного досье."
 			return 1
 		# Если студент с такой фамилией один
 		elif (( matches == 1 )); then
@@ -273,7 +313,7 @@ dossier() {
 				# Вывод номера i и i-го досье
 				echo "$i - $(grep -m $i -A1 "$surname" $filepath | tail -n 2)"
 			
-				((i=i+1))
+				(( i=i+1 ))
 			done
 			
 			read -r -p ">> " match
@@ -291,8 +331,18 @@ dossier() {
 		return 1
 	fi
 	
+	surname=$(grep -m $match "$surname" $filepath | head -n $match | tail -n 1)
+	dossier=$(grep -m $match -A1 "$surname" $filepath | tail -n 1)
+	
+	# Если досье по какой то причине отсутствует
+	if [[ $dossier == *"="* ]]; then
+		error "Ошибка: фамилия найдена, однако досье отсутствует."
+		return 1
+	fi
+	
 	# Вывод найденного досье
-	grep -m $match -A1 "$surname" $filepath | tail -n 1
+	echo -e -n "${BOLD}Досье студента $surname:${RESET} "
+	echo "$dossier"
 	
 	read -r -p "Удалить досье студента $surname? (y/n): " response
 
