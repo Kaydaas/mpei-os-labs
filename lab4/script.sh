@@ -20,7 +20,7 @@ print_help() {
 	echo
 	echo -e "${BOLD}Примеры:${RESET}"
 	echo "$0 -r A-06-20"
-	echo "$0 --sort A-09-20"
+	echo "$0 --sort_group A-09-20"
 	echo "$0 -m DavydovAD"
 	echo "$0 -d BoldyrenIN"
 }
@@ -32,16 +32,39 @@ error() {
 
 # Проверка на наличие тестов по заданному предмету
 check_if_tests_exist() {
-	if [[ -z $(ls "./$1/tests" | grep TEST-.) ]]; then
+	subject=$1
+
+	if [[ -z $(ls "./$subject/tests" | grep TEST-.) ]]; then
 		error "Ошибка: файлы с тестами не найдены."
 		echo "Проверьте, что в директории ./$1/tests есть файлы TEST-*"
 		exit 1
 	fi
 }
 
-# Проверка на соостветствие фамилии шаблону
+# Проверка группы на наличие и соостветствие шаблону
+check_group() {
+	group=$1
+
+	# Проверка группы на соответствие шаблону
+	if ! [[ "$group" =~ ^A-[0-9]{2}-[0-9]{2}$ ]]; then
+		error "Ошибка: Неверный формат номера группы."
+		echo "Формат группы должен быть: A-NN-YY."
+		exit 1
+	fi
+	
+	# Проверка на наличие такой группы
+	if (( $(ls ./students/groups | grep $group | wc -l) == 0 )); then
+		error "Ошибка: группа не найдена."
+		group_list
+		exit 1
+	fi
+}
+
+# Проверка фамилии на соостветствие шаблону
 check_surname() {
-	if [[ "$1" =~ [^a-zA-Z\-] ]]; then
+	surname=$1
+
+	if [[ "$surname" =~ [^a-zA-Z\-] ]]; then
 		error "Ошибка: Неверный формат фамилии."
 		echo "Фамилия должна содержать только латинские буквы."
         exit 1
@@ -50,8 +73,10 @@ check_surname() {
 
 # Проверка каждой строки из файла с тестом на соответствие шаблону
 check_tests_template() {
-	for line in $1; do
-		if ! [[ $line =~ ^(A-[0-9][0-9]-[0-9][0-9];[a-zA-Z\-]*;[0-9]*;[0-9];2)$ ]]; then
+	test_results=$1
+
+	for line in $test_results; do
+		if ! [[ $line =~ ^(A-[0-9]{2}-[0-9]{2};[a-zA-Z\-]*;[0-9]*;[0-9]*;2)$ ]]; then
 			error "Ошибка: Строка '$line' не соответствует шаблону."
 			exit 1
 		fi
@@ -101,22 +126,11 @@ min_retakes_help() {
 
 # Вывод имени студента с минимальным количеством пересдач
 min_retakes() {
-    local group=$1
+    group=$1
 
-	# Проверка соответствия шаблону группы
-	if ! [[ "$group" =~ ^A-[0-9][1-9]-[0-9][0-9]$ ]]; then
-		error "Ошибка: Неверный формат номера группы."
-		echo "Формат группы должен быть: A-NN-YY."
-		return 1
-	fi
-	
-	# Проверка на наличие такой группы
-	if (( $(ls ./students/groups | grep $group | wc -l) == 0 )); then
-		error "Ошибка: группа не найдена."
-		group_list
-		return 1
-	fi
-	
+	# Проверка группы на наличие и соостветствие шаблону
+	check_group $group
+
 	# Выбор предмета
 	echo -e "${BOLD}Выберите предмет:${RESET}" 
 	subjects="$(find . -maxdepth 1 -type d | grep ./ | grep -v students | sed "s/\.\///")"
@@ -157,19 +171,8 @@ sort_group_help() {
 sort_group() {
     group=$1
 
-	# Проверка соответствия шаблону группы
-	if ! [[ "$group" =~ ^A-[0-9][1-9]-[0-9][0-9]$ ]]; then
-		error "Ошибка: Неверный формат номера группы."
-		echo "Формат группы должен быть: A-NN-YY."
-		exit 1
-	fi
-	
-	# Проверка на наличие такой группы
-	if (( $(ls ./students/groups | grep $group | wc -l) == 0 )); then
-		error "Ошибка: группа не найдена."
-		group_list
-		exit 1
-	fi
+	# Проверка группы на наличие и соостветствие шаблону
+	check_group $group
 	
 	# Выбор предмета
 	echo -e "${BOLD}Выберите предмет:${RESET}"
@@ -218,7 +221,7 @@ missed() {
 	check_surname $surname
 	
 	#Список студентов, найденных по данной фамилии
-	students=$(grep -r "$surname" ./students/groups/ | sed "s/.*\(A-[0-9][0-9]-[0-9][0-9]\):\([a-zA-Z]*\)/\1 \2/")
+	students=$(grep -r "^$surname" ./students/groups/ | sed "s/.*\(A-[0-9][0-9]-[0-9][0-9]\):\([a-zA-Z]*\)/\1 \2/")
 
 	if [[ -z $students ]]; then
 		# Если нет студентов с такой фамилией
