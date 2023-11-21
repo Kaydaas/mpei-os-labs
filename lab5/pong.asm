@@ -1,20 +1,16 @@
-	org 0x2000
-	
-	jmp Start
+[org 0x7E00]
+
+jmp Start
 
 ; TITLE
 Pong:
-	db "      ___         ___           ___           ___      ", 0
-	db "     /  /\       /  /\         /__/\         /  /\     ", 0
-	db "    /  /::\     /  /::\        \  \:\       /  /:/_    ", 0
-	db "   /  /:/\:\   /  /:/\:\        \  \:\     /  /:/ /\   ", 0
-	db "  /  /:/~/:/  /  /:/  \:\   _____\__\:\   /  /:/_/::\  ", 0
-	db " /__/:/ /:/  /__/:/ \__\:\ /__/::::::::\ /__/:/__\/\:\ ", 0
-	db " \  \:\/:/   \  \:\ /  /:/ \  \:\~~\~~\/ \  \:\ /~~/:/ ", 0
-	db "  \  \::/     \  \:\  /:/   \  \:\  ~~~   \  \:\  /:/  ", 0
-	db "   \  \:\      \  \:\/:/     \  \:\        \  \:\/:/   ", 0
-	db "    \  \:\      \  \::/       \  \:\        \  \::/    ", 0
-	db "     \__\/       \__\/         \__\/         \__\/     ", 0
+	db "  _______ _______ ______  _______ ", 0
+	db " |   _   |   _   |   _  \|   _   |", 0
+	db " |.  1   |.  |   |.  |   |.  |___|", 0
+	db " |.  ____|.  |   |.  |   |.  |   |", 0
+	db " |:  |   |:  1   |:  |   |:  1   |", 0
+	db " |::.|   |::.. . |::.|   |::.. . |", 0
+	db " `---'   `-------`--- ---`-------'", 0
 	
 
 
@@ -45,17 +41,14 @@ Start:
 	int 0x10          ; Call BIOS video services
 
     mov si, Pong
+	mov cx, 7
+logo_print_loop:
+	push cx
+	cld
 	call Print
-	call Print
-	call Print
-	call Print
-	call Print
-	call Print
-	call Print
-	call Print
-	call Print
-	call Print
-	call Print
+	pop cx
+	loop logo_print_loop
+
 
     jmp $           ; Infinite loop
 
