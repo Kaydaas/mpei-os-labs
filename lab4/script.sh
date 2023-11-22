@@ -69,7 +69,7 @@ check_surname() {
 	if [[ "$surname" =~ [^a-zA-Z\-] ]]; then
 		error "Неверный формат фамилии."
 		echo "Фамилия должна содержать только латинские буквы."
-        exit 1
+		exit 1
 	fi
 }
 
@@ -128,7 +128,7 @@ min_retakes_help() {
 
 # Вывод имени студента с минимальным количеством пересдач
 min_retakes() {
-    group=$1
+	group=$1
 
 	# Проверка группы на наличие и соостветствие шаблону
 	check_group $group
@@ -146,7 +146,7 @@ min_retakes() {
 	check_tests_template "$(grep "$group" ./$subject/tests/TEST-* | sed "s/.*:\(.*\)/\1/")"
 	
 	# Все пересдачи в указанной группе
-    retakes=$(grep "$group" ./$subject/tests/TEST-* | grep "2$" | sed "s/.*;\(.*\);.*;.*;.*/\1/g" | sort | uniq -c | sort)
+	retakes=$(grep "$group" ./$subject/tests/TEST-* | grep "2$" | sed "s/.*;\(.*\);.*;.*;.*/\1/g" | sort | uniq -c | sort)
 
 	if [ -z "$retakes" ]; then
 		echo "Не найдено студентов с пересдачами."
@@ -171,7 +171,7 @@ sort_group_help() {
 
 # Вывод списка группы, упорядоченного по количеству попыток сдачи теста
 sort_group() {
-    group=$1
+	group=$1
 
 	# Проверка группы на наличие и соостветствие шаблону
 	check_group $group
@@ -218,7 +218,7 @@ missed_help() {
 
 # Вывод по фамилии студента номеров пропущенных занятий
 missed() {
-    surname=$1
+	surname=$1
 	
 	check_surname $surname
 	
@@ -288,7 +288,7 @@ dossier_help() {
 
 # Вывод по фамилии студента его досье; его удаление по подтверждению пользователя
 dossier() {
-    surname=${1^}
+	surname=${1^}
 	
 	check_surname $surname
 	
