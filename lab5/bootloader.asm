@@ -2,24 +2,34 @@
 
 jmp Start
 
-Start:
-	; Reading the disk sector with the main program
-	mov ah, 2
-	mov al, 1
-	mov ch, 0
-	mov dh, 0
-	mov cl, 2
-	mov bx, 0x7E00 ; The main program is at 0x7E00
-	int 0x13
+; ---INCLUDES---
+%include "video.asm"
+%include "disk.asm"
 
-	jnc Success
-	jmp Loop ; If error
+; ---STRINGS---
+ErrorMessage: db "Error while reading the disk.", 0
+SuccessMessage: db "Reading successful.", 0
+
+Start:
+    call SetVideoMode
+
+    mov bx, GAME_LOCATION
+    call DiskRead
+
+    jnc Success
+
+    ; If error
+    mov si, ErrorMessage
+    call PrintStringL
+    jmp Loop
 
 Success:
-	jmp 0x7E00 ; Jumping to the main program
+    mov si, SuccessMessage
+    call PrintStringL
+    jmp GAME_LOCATION ; Jump to the game code
 
 Loop:
-	jmp Loop
+    jmp Loop
 
-times 510 - ($ - $$) db 0
+times 510-($-$$) db 0
 dw 0xAA55

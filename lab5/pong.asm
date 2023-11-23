@@ -1,54 +1,29 @@
-[org 0x7E00]
+; ---STRINGS---
+GameKeyboardLegend: db "PLAYER1: W, S | PLAYER2: ARROWS UP, DOWN | QUIT: ESC", 0
 
-jmp Start
-
-; Title
-Pong:
-	db "  _______ _______ ______  _______ ", 0
-	db " |   _   |   _   |   _  \|   _   |", 0
-	db " |.  1   |.  |   |.  |   |.  |___|", 0
-	db " |.  ____|.  |   |.  |   |.  |   |", 0
-	db " |:  |   |:  1   |:  |   |:  1   |", 0
-	db " |::.|   |::.. . |::.|   |::.. . |", 0
-	db " `---'   `-------`--- ---`-------'", 0	
-
-
-Print:
-	lodsb ; Load character from SI
-	or al, al ; Check for string termination
-	jz PrintNewLine ; If zero, end of string
-	mov ah, 0x0e ; Print character
-	int 0x10
-	jmp Print ; Print next character
-PrintNewLine:
-	mov al, 0x0D ; Carriage return
-	mov ah, 0x0E ; Print character
-	int 0x10
-	mov al, 0x0A ; Line feed
-	mov ah, 0x0E ; Print character
-	int 0x10
-PrintDone:
+; ---MENU HANDLE---
+HandleGameInput:
+	cmp al, 0x1B ; Check if 'Enter' key is pressed
+	je QuitGame
+	jmp GameLoop ; Continue waiting for input if no valid key is pressed
+QuitGame:
 	ret
 
-Start:
-
-	; Clear screen
-	mov eax, 0x02     ; Function number: clear screen
-	xor ebx, ebx      ; Page number: 0 (default)
-	xor edx, edx      ; Upper left corner: 0,0
-	xor esi, esi      ; Lower right corner: 0,0
-	int 0x10          ; Call BIOS video services
-
-	mov si, Pong
-	mov cx, 7
-PrintLoop:
-	push cx
-	cld
-	call Print
-	pop cx
-	loop PrintLoop
-
+Game:
+	call ClearScreen
+	call HideCursor
+	
+	; Print keyboard legend at the bottom of the screen
+	mov byte [CursorPosition], KeyboardLegendPosition
+	call SetCursor
+	mov si, GameKeyboardLegend
+	call PrintString
+	
 GameLoop:
-    jmp GameLoop
-
-times 1024 - ($ - $$) db 0    ; Pad the program to 1024 bytes
+		; Whait for input
+	mov ah, 0 ; Reset AH to read keyboard input
+	int 0x16 ; Wait for keypress
+	jmp HandleGameInput
+	
+	jmp GameLoop
+	
