@@ -1,50 +1,49 @@
-[org 0x7E00]
+[org 0x8200]
 
 jmp Start
 
 ; ---INCLUDES---
-%include "visual.asm"
+%include "o.asm"
+%include "disk.asm"
 
 ; ---STRINGS---
 ; Logo
-Logo:
-	db "{__       {__ {__ {___     {__ {________   {__ __  ", 0
-	db "{_ {__   {___ {__ {_ {__   {__ {__       {__    {__", 0
-	db "{__ {__ { {__ {__ {__ {__  {__ {__        {__      ", 0
-	db "{__  {__  {__ {__ {__  {__ {__ {______      {__    ", 0
-	db "{__   {_  {__ {__ {__   {_ {__ {__             {__ ", 0
-	db "{__       {__ {__ {__    {_ __ {__       {__    {__", 0
-	db "{__       {__ {__ {__      {__ {________   {__ __  ", 0
 ; Keyboard legend at the bottom of the screen
-GameKeyboardLegend: db "MOVE CURSOR: W, A, S, D | DEFUSE: SPACE | RESTART: R", 0
+GameKeyboardLegend: db "MOVE CURSOR: W, A, S, D | DEFUSE: SPACE | RESTART: R | QUIT: ESC", 0
+WinMessage: db "YOU WON! :)", 0
+LoseMessage: db "GAME OVER! :(", 0
+ResultKeyboardLegend: db "RESTART: R | QUIT: ESC", 0
 
 ; ---CONSTANTS---
-; Number of lines in logo, used for printing
-LogoLength equ 7
 MATRIX_SIZE equ 10 ; 10x10 matrix
 MINE_PROBABILITY equ 15 ; 1-100 %
 
 ; ---VARIABLES---
 Matrix times MATRIX_SIZE * MATRIX_SIZE db 0 ; 10x10 matrix
 MinesTotal: db 0
-MinesDefused: db 0
+TilesLeft: db 0
 CursorX: db 0 ; Cursor X position
 CursorY: db 0 ; Cursor Y position
 RandomNumber: db 0
 Counter: dd 0
 
 ; ---PROCEDURES---
-PrintLogo:
-	mov si, Logo
-	mov cx, LogoLength
-PrintLogoLoop:
-	push cx
-	cld
-	call PrintStringL
-	pop cx
-	loop PrintLogoLoop
+HideCursor:
+	mov ch, 32 
+	mov ah, 1 
+	int 10h
 	ret
-	
+
+ResetCursor:
+	mov ch, 6 
+	mov cl, 7 
+	mov ah, 1 
+	int 10h 
+	mov byte [CursorX], 0
+	mov byte [CursorY], 0
+	call SetCursor
+	ret
+
 IncIndex:
 	inc byte [CursorX]
 	cmp byte [CursorX], MATRIX_SIZE
@@ -57,9 +56,8 @@ IncIndexEnd:
 PrintMatrix:
 	; Counter to get the current 
 	mov byte [Counter], 0
-
-	mov byte [CursorX], 0
-	mov byte [CursorY], 0
+	mov byte [MinesTotal], 0
+	call ResetCursor
 	
 	mov     esi, Matrix
 
@@ -69,7 +67,7 @@ PrintMatrixLoop:
 
 	call SetCursor
 	
-	mov al, 'X'
+	mov al, 176
 	
 	call PrintChar
 	
@@ -87,8 +85,9 @@ PrintMatrixLoop:
 	mov [esi], dword ' '
 	jmp Continue
 PlantMine:
-	mov [esi], dword '*'
-
+	;mov [esi], dword '*'
+	mov byte [esi], '*'
+	inc byte [MinesTotal]
 	
 Continue:
 	inc esi
@@ -100,9 +99,31 @@ Continue:
 MatrixPrintEnd:
 	ret
 
+CountTotalMines:
+	mov byte [Counter], 0
+	mov byte [MinesTotal], 0
+	call ResetCursor
+	mov esi, Matrix
+CountTotalMinesLoop:
+	cmp byte [Counter], MATRIX_SIZE * MATRIX_SIZE
+	je CountTotalMinesEnd   ; Exit the loop if they are equal
+	call SetCursor
+	call GetElement
+	cmp al, '*'
+	jne CountTotalMinesContinue
+	inc byte [MinesTotal]
+CountTotalMinesContinue:
+	inc byte [Counter]
+	call IncIndex
+	jmp CountTotalMinesLoop
+CountTotalMinesEnd:
+	call ResetCursor
+	ret
+
+
+
 SetCursor:
 	mov dh, byte [CursorY] ; Row
-	add dh, LogoLength + 1
 	mov dl, byte [CursorX] ; Column
 	add dl, dl ; Multiply X coordinate by 2, just for better appearance
 	mov bh, 0 ; Page number
@@ -123,6 +144,8 @@ HandleGameInput:
 	je Defuse
 	cmp al, 'r' ; Check if 'R' key is pressed
 	je Restart
+	cmp al, 0x1B ; Check if 'R' key is pressed
+	je Quit
 	jmp GameLoop ; Continue waiting for input if no valid key is pressed
 	
 MoveCursorUp:
@@ -161,59 +184,106 @@ GetElement:
 
 CountMinesAround:
 	mov byte [Counter], 0
+	
+	mov cl, byte [CursorY]
+	mov ch, byte [CursorX]
 
-	; Check element above
+	; Top left
     dec byte [CursorY]
 	dec byte [CursorX]
+	
+	cmp cl, 0
+	je skip1
+	
+	cmp ch, 0
+	je skip1
+	
     call GetElement
     cmp al, '*'
     jne skip1
 	inc byte [Counter]
 skip1:
-    ; Check element below
+    ; Top
     inc byte [CursorX]
+	
+	cmp cl, 0
+	je skip2
+	
     call GetElement
     cmp al, '*'
     jne skip2
 	inc byte [Counter]
 skip2:
-    ; Check element to the left
+    ; Top right
     inc byte [CursorX]
+	
+	cmp cl, 0
+	je skip3
+	
+	cmp ch, MATRIX_SIZE - 1
+	je skip3
+	
     call GetElement
     cmp al, '*'
     jne skip3
 	inc byte [Counter]
 skip3:
-    ; Check element to the right
+    ; Right
     inc byte [CursorY]
+	
+	cmp ch, MATRIX_SIZE - 1
+	je skip4
+	
     call GetElement
     cmp al, '*'
     jne skip4
 	inc byte [Counter]
 skip4:
-    ; Check element to the top-left
+    ; Bottom right
     inc byte [CursorY]
+	
+	cmp cl, MATRIX_SIZE - 1
+	je skip5
+	
+	cmp ch, MATRIX_SIZE - 1
+	je skip5
+	
     call GetElement
     cmp al, '*'
     jne skip5
 	inc byte [Counter]
 skip5:
-    ; Check element to the top-right
+    ; Bottom
     dec byte [CursorX]
+	
+	cmp cl, MATRIX_SIZE - 1
+	je skip6
+	
     call GetElement
     cmp al, '*'
     jne skip6
 	inc byte [Counter]
 skip6:
-    ; Check element to the bottom-right
+    ; Bottom left
     dec byte [CursorX]
+	
+	cmp cl, MATRIX_SIZE - 1
+	je skip7
+	
+	cmp ch, 0
+	je skip8
+	
     call GetElement
     cmp al, '*'
     jne skip7
 	inc byte [Counter]
 skip7:
-    ; Check element to the bottom-left
+    ; Left
     dec byte [CursorY]
+	
+	cmp ch, 0
+	je skip8
+	
     call GetElement
     cmp al, '*'
     jne skip8
@@ -225,40 +295,88 @@ skip8:
 	ret
 
 Defuse:
+	mov ah, 0x08 ; BIOS function to read character from screen
+	int 10h      ; Call BIOS interrupt
+	cmp al, 176
+	je DecTilesLeft
+
+
+DefuseContinue:
     call GetElement
-	
 	cmp al, '*'
-	je Restart
-	mov cl, byte [CursorX]
-	mov ch, byte [CursorY]
+	je GameOver
+	
+	mov cl, byte [MinesTotal]
+	mov bl, byte [TilesLeft]
+	cmp cl, bl
+	je Win
+	
+	mov dl, byte [CursorX]
+	mov dh, byte [CursorY]
 	call CountMinesAround
-	mov byte [CursorX], cl
-	mov byte [CursorY], ch
+	mov byte [CursorX], dl
+	mov byte [CursorY], dh
 	cmp al, '0'
 	jne DefuseEnd
 	mov al, ' '
 DefuseEnd:
 	call PrintChar
+
 	jmp GameLoop
+DecTilesLeft:
+	dec byte [TilesLeft]
+	
+	jmp DefuseContinue
+
+
+Win:
+	call ClearScreen
+	call ResetCursor
+	mov si, WinMessage
+	call PrintStringL
+	jmp Result
+GameOver:
+	call ClearScreen
+	call ResetCursor
+	mov si, LoseMessage
+	call PrintStringL
+Result:
+	mov byte [CursorPosition], KeyboardLegendPosition
+	call SetCursorRow
+	mov si, ResultKeyboardLegend
+	call PrintString
+	call HideCursor
+ResultLoop:
+	mov ah, 0 ; Reset AH to read keyboard input
+	int 0x16
+	cmp al, 'r' ; Check if 'R' key is pressed
+	je Restart
+	cmp al, 0x1B ; Check if 'R' key is pressed
+	je Quit
+	jmp ResultLoop
+	
 
 Restart:
 	jmp Start
 
+Quit:
+	jmp MENU_LOCATION
+
 Start:
 	call ClearScreen
-	call PrintLogo
 
 	call SetCursor
 	
 	call PrintMatrix
-	; Print keyboard legend at the bottom of the screen
 	mov byte [CursorPosition], KeyboardLegendPosition
 	call SetCursorRow
 	mov si, GameKeyboardLegend
 	call PrintString
 
-	mov byte [CursorX], 0
-	mov byte [CursorY], 0
+	call ResetCursor
+	mov byte [TilesLeft], MATRIX_SIZE * MATRIX_SIZE
+
+	call CountTotalMines
 
 GameLoop:
 	call SetCursor

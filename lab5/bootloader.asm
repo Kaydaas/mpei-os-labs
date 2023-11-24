@@ -3,7 +3,7 @@
 jmp Start
 
 ; ---INCLUDES---
-%include "visual.asm"
+%include "o.asm"
 %include "disk.asm"
 
 ; ---STRINGS---
@@ -13,7 +13,7 @@ SuccessMessage: db "Reading successful.", 0
 Start:
     call SetVideoMode
 
-    mov bx, GAME_LOCATION
+    mov bx, MENU_LOCATION
     call DiskRead
 
     jnc Success
@@ -26,7 +26,7 @@ Start:
 Success:
     mov si, SuccessMessage
     call PrintStringL
-    jmp GAME_LOCATION ; Jump to the game code
+    jmp MENU_LOCATION ; Jump to the game code
 
 Loop:
     jmp Loop
