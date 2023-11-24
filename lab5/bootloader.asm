@@ -3,7 +3,7 @@
 jmp Start
 
 ; ---INCLUDES---
-%include "video.asm"
+%include "visual.asm"
 %include "disk.asm"
 
 ; ---STRINGS---

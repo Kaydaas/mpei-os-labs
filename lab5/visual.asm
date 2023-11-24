@@ -21,16 +21,15 @@ ClearScreen:
 	ret
 
 PrintChar:
-    mov ah, 0x0e ; Print character
-    int 0x10 ; Call BIOS video services
-    ret
+	mov ah, 0x0E ; Print character
+	int 0x10 ; Call BIOS video services
+	ret
 
 PrintString:
 	lodsb ; Load character from SI
 	or al, al ; Check for string termination
 	jz PrintStringEnd ; If zero, end of string
-	mov ah, 0x0e ; Print character
-	int 0x10 ; Call BIOS video services
+	call PrintChar ; Print character
 	jmp PrintString ; Print next character
 PrintStringEnd:
 	ret
@@ -50,22 +49,10 @@ PrintStringL:
 	call PrintNewLine
 	ret
 	
-SetCursor:
+SetCursorRow:
 	mov dh, byte [CursorPosition] ; Row
 	mov dl, 0 ; Column
 	mov bh, 0 ; Page number
 	mov ah, 2
 	int 10h
-	ret
-	
-HideCursor:
-	mov ah, 0x01 ; Set cursor function
-	mov cx, 0x2000 ; Define cursor shape (all pixels off)
-	int 0x10 ; Call BIOS video services
-	ret
-
-ShowCursor:
-	mov ah, 0x01 ; Set cursor function
-	mov cx, 0x0607 ; Define cursor shape (underline, normal size)
-	int 0x10 ; Call BIOS video services
 	ret
