@@ -7,182 +7,200 @@ jmp Start
 %include "disk.asm"
 
 ; ---STRINGS---
-; Logo
-; Keyboard legend at the bottom of the screen
 GameKeyboardLegend: db "MOVE CURSOR: W, A, S, D | DEFUSE: SPACE | RESTART: R | QUIT: ESC", 0
+ResultKeyboardLegend: db "RESTART: R | QUIT: ESC", 0
 WinMessage: db "YOU WON! :)", 0
 LoseMessage: db "GAME OVER! :(", 0
-ResultKeyboardLegend: db "RESTART: R | QUIT: ESC", 0
 
 ; ---CONSTANTS---
-MATRIX_SIZE equ 10 ; 10x10 matrix
-MINE_PROBABILITY equ 15 ; 1-100 %
+MAX_BOARD_SIZE equ 20
+MINE_PROBABILITY equ 15 ; 0-100, %
+EMPTY equ ' '
+MINE equ '*'
 
 ; ---VARIABLES---
-Matrix times MATRIX_SIZE * MATRIX_SIZE db 0 ; 10x10 matrix
-MinesTotal: db 0
-TilesLeft: db 0
-CursorX: db 0 ; Cursor X position
-CursorY: db 0 ; Cursor Y position
-RandomNumber: db 0
-Counter: dd 0
+CursorXTemp: db 0
+CursorYTemp:
+BoardSize: db 0
+BoardLength: dw 0
+Board times MAX_BOARD_SIZE * MAX_BOARD_SIZE db 0
+MinesTotal: dw 0 ; Total number of mines on board
+TilesLeft: dw 0 ; Number of undefused tiles
+
+Counter: dw 0
 
 ; ---PROCEDURES---
-HideCursor:
-	mov ch, 32 
-	mov ah, 1 
-	int 10h
-	ret
-
-ResetCursor:
-	mov ch, 6 
-	mov cl, 7 
-	mov ah, 1 
-	int 10h 
-	mov byte [CursorX], 0
-	mov byte [CursorY], 0
-	call SetCursor
-	ret
-
-IncIndex:
+; Next Cursor position
+NextCursorPosition:
 	inc byte [CursorX]
-	cmp byte [CursorX], MATRIX_SIZE
-	jl IncIndexEnd
+	mov al, byte [CursorX]
+	cmp al, byte [BoardSize]
+	jl NextCursorPositionEnd
+	
 	mov byte [CursorX], 0
 	inc byte [CursorY]
-IncIndexEnd:
+	
+NextCursorPositionEnd:
 	ret
 
-PrintMatrix:
-	; Counter to get the current 
-	mov byte [Counter], 0
-	mov byte [MinesTotal], 0
+; Print board
+PrintBoard:
+	mov word [Counter], 0
 	call ResetCursor
+
+PrintBoardLoop:
+	mov ax, word [Counter]
+	mov cx, word [BoardLength]
+	cmp ax, cx
+	je PrintBoardEnd
 	
-	mov     esi, Matrix
-
-PrintMatrixLoop:
-	cmp byte [Counter], MATRIX_SIZE * MATRIX_SIZE
-	je MatrixPrintEnd   ; Exit the loop if they are equal
-
 	call SetCursor
 	
 	mov al, 176
+	call PutChar
 	
-	call PrintChar
+	inc word [Counter]
+	call NextCursorPosition
+	jmp PrintBoardLoop
 	
-	rdtsc
-	xor     edx, edx             ; Required because there's no division of EAX solely
-	mov     ecx, 99   ; 99 possible values
-	div     ecx                  ; EDX:EAX / ECX --> EAX quotient, EDX remainder
-	mov     eax, edx             ; -> EAX = [1,100]
-	add     eax, 1
+PrintBoardEnd:
+	ret
 
+; Plant mines
+PlantMines:
+	mov word [Counter], 0
+	mov word [MinesTotal], 0
+	call ResetCursor
 	
+PlantMiesLoop:
+	call SetCursor
+	mov ax, word [Counter]
+	mov cx, word [BoardLength]
+	cmp ax, cx
+	je PrintBoardEnd
+	
+	call CountOffset
+
+	; Get random number from 1 to 100
+	rdtsc
+	xor edx, edx ; Required because there's no division of EAX solely
+	mov ecx, 100 ; 100 possible values
+	div ecx ; EDX:EAX / ECX --> EAX quotient, EDX remainder
+	mov eax, edx ; -> EAX = [1,100]
+	add eax, 1
+
 	cmp al, MINE_PROBABILITY
 	jl PlantMine
 
-	mov [esi], dword ' '
-	jmp Continue
+	mov al, EMPTY
+	call PutTile
+	jmp PlantMinesContinue
+
 PlantMine:
-	;mov [esi], dword '*'
-	mov byte [esi], '*'
-	inc byte [MinesTotal]
-	
-Continue:
-	inc esi
-	
-	inc byte [Counter]
-	call IncIndex
+	inc word [MinesTotal]
+	mov al, MINE
+	call PutTile
 
-	jmp PrintMatrixLoop
-MatrixPrintEnd:
+PlantMinesContinue:
+	; DEBUG
+	;call GetTile
+	;call PutChar
+	; DEBUG END
+
+	inc word [Counter]
+	call NextCursorPosition
+	jmp PlantMiesLoop
+
+PlantMinesEnd:
 	ret
 
-CountTotalMines:
-	mov byte [Counter], 0
-	mov byte [MinesTotal], 0
-	call ResetCursor
-	mov esi, Matrix
-CountTotalMinesLoop:
-	cmp byte [Counter], MATRIX_SIZE * MATRIX_SIZE
-	je CountTotalMinesEnd   ; Exit the loop if they are equal
-	call SetCursor
-	call GetElement
-	cmp al, '*'
-	jne CountTotalMinesContinue
-	inc byte [MinesTotal]
-CountTotalMinesContinue:
-	inc byte [Counter]
-	call IncIndex
-	jmp CountTotalMinesLoop
-CountTotalMinesEnd:
-	call ResetCursor
-	ret
-
-
-
-SetCursor:
-	mov dh, byte [CursorY] ; Row
-	mov dl, byte [CursorX] ; Column
-	add dl, dl ; Multiply X coordinate by 2, just for better appearance
-	mov bh, 0 ; Page number
-	mov ah, 2
-	int 10h
-	ret
 
 HandleGameInput:
 	cmp al, 'w' ; Check if 'W' key is pressed
 	je MoveCursorUp
-	cmp al, 'a' ; Check if 'W' key is pressed
+	cmp al, 'a' ; Check if 'A' key is pressed
 	je MoveCursorLeft
-	cmp al, 's' ; Check if 'W' key is pressed
+	cmp al, 's' ; Check if 'S' key is pressed
 	je MoveCursorDown
-	cmp al, 'd' ; Check if 'W' key is pressed
+	cmp al, 'd' ; Check if 'D' key is pressed
 	je MoveCursorRight
-	cmp al, 0x20 ; Check if 'R' key is pressed
+	cmp al, 0x20 ; Check if 'SPACE' key is pressed
 	je Defuse
 	cmp al, 'r' ; Check if 'R' key is pressed
 	je Restart
-	cmp al, 0x1B ; Check if 'R' key is pressed
+	cmp al, 0x1B ; Check if 'ESC' key is pressed
 	je Quit
 	jmp GameLoop ; Continue waiting for input if no valid key is pressed
-	
+
 MoveCursorUp:
 	cmp byte [CursorY], 0
 	je GameLoop
 	dec byte [CursorY]
 	jmp GameLoop
+	
 MoveCursorLeft:
 	cmp byte [CursorX], 0
 	je GameLoop
 	dec byte [CursorX]
 	jmp GameLoop
+	
 MoveCursorDown:
-	cmp byte [CursorY], MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp al, byte [CursorY]
 	je GameLoop
 	inc byte [CursorY]
 	jmp GameLoop
+	
 MoveCursorRight:
-	cmp byte [CursorX], MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp al, byte [CursorX]
 	je GameLoop
 	inc byte [CursorX]
 	jmp GameLoop
+; ====================================================================
 
-GetElement:
-	mov al, byte [CursorY]
-	mov bl, MATRIX_SIZE
-	mul bl
-	add al, byte [CursorX]
+CountOffset:
+	push eax
+	push ebx
+	push edx
+	push edi
+	
+	
+	
+	movzx eax, byte [CursorY]
+	movzx ebx, byte [BoardSize]
+	mul ebx
+	movzx ebx, byte [CursorX]
+	add eax, ebx
 
-	; Add the offset to esi
-	mov esi, Matrix
-	add esi, eax
-
-	mov al, [esi]
+    ; Add the offset to esi
+    movzx edi, ax ; Zero-extend ax into edi register
+    mov esi, Board
+    add esi, eax
+	
+	pop edi
+	pop edx
+	pop ebx
+	pop eax
+	
 	ret
 
+PutTile:
+	call CountOffset
+	
+	mov byte [esi], al
+	ret
+
+GetTile:
+    call CountOffset
+
+    mov al, byte [esi]
+    ret
+
 CountMinesAround:
+	pusha
 	mov byte [Counter], 0
 	
 	mov cl, byte [CursorY]
@@ -198,7 +216,7 @@ CountMinesAround:
 	cmp ch, 0
 	je skip1
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip1
 	inc byte [Counter]
@@ -209,7 +227,7 @@ skip1:
 	cmp cl, 0
 	je skip2
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip2
 	inc byte [Counter]
@@ -220,10 +238,12 @@ skip2:
 	cmp cl, 0
 	je skip3
 	
-	cmp ch, MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp ch, al
 	je skip3
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip3
 	inc byte [Counter]
@@ -231,10 +251,12 @@ skip3:
     ; Right
     inc byte [CursorY]
 	
-	cmp ch, MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp ch, al
 	je skip4
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip4
 	inc byte [Counter]
@@ -242,13 +264,17 @@ skip4:
     ; Bottom right
     inc byte [CursorY]
 	
-	cmp cl, MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp cl, al
 	je skip5
 	
-	cmp ch, MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp ch, al
 	je skip5
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip5
 	inc byte [Counter]
@@ -256,10 +282,12 @@ skip5:
     ; Bottom
     dec byte [CursorX]
 	
-	cmp cl, MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp cl, al
 	je skip6
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip6
 	inc byte [Counter]
@@ -267,13 +295,15 @@ skip6:
     ; Bottom left
     dec byte [CursorX]
 	
-	cmp cl, MATRIX_SIZE - 1
+	mov al, byte [BoardSize]
+	dec al
+	cmp cl, al
 	je skip7
 	
 	cmp ch, 0
 	je skip8
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip7
 	inc byte [Counter]
@@ -284,15 +314,17 @@ skip7:
 	cmp ch, 0
 	je skip8
 	
-    call GetElement
+    call GetTile
     cmp al, '*'
     jne skip8
 	inc byte [Counter]
 skip8:
+	popa
 	mov al, byte [Counter]
 	add al, '0'
-
 	ret
+	
+	
 
 Defuse:
 	mov ah, 0x08 ; BIOS function to read character from screen
@@ -300,9 +332,8 @@ Defuse:
 	cmp al, 176
 	je DecTilesLeft
 
-
 DefuseContinue:
-    call GetElement
+    call GetTile
 	cmp al, '*'
 	je GameOver
 	
@@ -319,14 +350,15 @@ DefuseContinue:
 	cmp al, '0'
 	jne DefuseEnd
 	mov al, ' '
-DefuseEnd:
-	call PrintChar
-
-	jmp GameLoop
-DecTilesLeft:
-	dec byte [TilesLeft]
 	
+DefuseEnd:
+	call PutChar
+	jmp GameLoop
+
+DecTilesLeft:
+	dec word [TilesLeft]
 	jmp DefuseContinue
+
 
 
 Win:
@@ -341,7 +373,7 @@ GameOver:
 	mov si, LoseMessage
 	call PrintStringL
 Result:
-	mov byte [CursorPosition], KeyboardLegendPosition
+	mov byte [CursorPosition], KEYBOARD_LEGEND_POSITION
 	call SetCursorRow
 	mov si, ResultKeyboardLegend
 	call PrintString
@@ -354,30 +386,59 @@ ResultLoop:
 	cmp al, 0x1B ; Check if 'R' key is pressed
 	je Quit
 	jmp ResultLoop
-	
-
-Restart:
-	jmp Start
 
 Quit:
 	jmp MENU_LOCATION
 
-Start:
-	call ClearScreen
 
-	call SetCursor
+; Set difficulty using the symbol on the screen printed in menu
+SetDifficulty:
+	call ResetCursor
+	call GetChar
+	cmp al, 0
+	je EasyDifficulty
+	cmp al, 1
+	je MediumDifficulty
+	cmp al, 2
+	je HardDifficulty
 	
-	call PrintMatrix
-	mov byte [CursorPosition], KeyboardLegendPosition
+EasyDifficulty:
+	mov byte [BoardSize], 5
+	jmp SetDifficultyEnd
+	
+MediumDifficulty:
+	mov byte [BoardSize], 10
+	jmp SetDifficultyEnd
+	
+HardDifficulty:
+	mov byte [BoardSize], 20
+	
+SetDifficultyEnd:
+	xor ax, ax
+	movzx ax, byte [BoardSize]
+	mul ax
+	mov word [BoardLength], ax
+	ret
+
+Start:
+	call SetDifficulty
+
+Restart:
+	call ClearScreen
+	
+	mov byte [CursorPosition], KEYBOARD_LEGEND_POSITION
 	call SetCursorRow
 	mov si, GameKeyboardLegend
 	call PrintString
 
+	call PrintBoard
+	call PlantMines
+	
 	call ResetCursor
-	mov byte [TilesLeft], MATRIX_SIZE * MATRIX_SIZE
-
-	call CountTotalMines
-
+	
+	mov ax, word [BoardLength]
+	mov word [TilesLeft], ax
+	
 GameLoop:
 	call SetCursor
 	; Whait for input
