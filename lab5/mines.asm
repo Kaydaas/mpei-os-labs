@@ -103,8 +103,8 @@ PlantMine:
 
 PlantMinesContinue:
 	; DEBUG
-	;call GetTile
-	;call PutChar
+	; call GetTile
+	; call PutChar
 	; DEBUG END
 
 	inc word [Counter]
@@ -159,15 +159,11 @@ MoveCursorRight:
 	je GameLoop
 	inc byte [CursorX]
 	jmp GameLoop
-; ====================================================================
 
 CountOffset:
 	push eax
 	push ebx
 	push edx
-	push edi
-	
-	
 	
 	movzx eax, byte [CursorY]
 	movzx ebx, byte [BoardSize]
@@ -175,12 +171,9 @@ CountOffset:
 	movzx ebx, byte [CursorX]
 	add eax, ebx
 
-    ; Add the offset to esi
-    movzx edi, ax ; Zero-extend ax into edi register
     mov esi, Board
     add esi, eax
 	
-	pop edi
 	pop edx
 	pop ebx
 	pop eax
@@ -333,13 +326,14 @@ Defuse:
 	je DecTilesLeft
 
 DefuseContinue:
+
     call GetTile
 	cmp al, '*'
 	je GameOver
 	
-	mov cl, byte [MinesTotal]
-	mov bl, byte [TilesLeft]
-	cmp cl, bl
+	mov cx, word [MinesTotal]
+	mov bx, word [TilesLeft]
+	cmp cx, bx
 	je Win
 	
 	mov dl, byte [CursorX]
@@ -414,7 +408,6 @@ HardDifficulty:
 	mov byte [BoardSize], 20
 	
 SetDifficultyEnd:
-	xor ax, ax
 	movzx ax, byte [BoardSize]
 	mul ax
 	mov word [BoardLength], ax

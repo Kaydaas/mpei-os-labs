@@ -20,6 +20,7 @@ Logo:
 EasyOption: db "EASY", 0
 MediumOption: db "MEDIUM", 0
 HardOption: db "HARD", 0
+CurrentOption: db ">", 0
 ; Keyboard Legend at the bottom of the screen
 MenuKeyboardLegend: db "SWITCH OPTION: W, S | CHOOSE OPTION: ENTER", 0
 
