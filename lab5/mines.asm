@@ -7,30 +7,29 @@ jmp Start
 %include "disk.asm"
 
 ; ---STRINGS---
+; Keyboard legend at the bottom of the screen
 GameKeyboardLegend: db "MOVE CURSOR: W, A, S, D | DEFUSE: SPACE | RESTART: R | QUIT: ESC", 0
 ResultKeyboardLegend: db "RESTART: R | QUIT: ESC", 0
 WinMessage: db "YOU WON! :)", 0
-LoseMessage: db "GAME OVER! :(", 0
+GameOverMessage: db "GAME OVER... :(", 0
 
 ; ---CONSTANTS---
-MAX_BOARD_SIZE equ 20
+MAX_BOARD_SIZE equ 20 ; 20x20
 MINE_PROBABILITY equ 15 ; 0-100, %
-EMPTY equ ' '
-MINE equ '*'
+EMPTY equ ' ' ; Char for empty tile
+MINE equ '*' ; Char for mine tile
+UNDEFUSED equ 176 ; Char for undefused tile ░
 
 ; ---VARIABLES---
-CursorXTemp: db 0
-CursorYTemp:
-BoardSize: db 0
-BoardLength: dw 0
+BoardSize: db 0 ; 5 - EASY, 10 - MEDIUM, 20 - HARD
+BoardLength: dw 0 ; BoardSize * BoardSize
 Board times MAX_BOARD_SIZE * MAX_BOARD_SIZE db 0
 MinesTotal: dw 0 ; Total number of mines on board
 TilesLeft: dw 0 ; Number of undefused tiles
-
 Counter: dw 0
 
 ; ---PROCEDURES---
-; Next Cursor position
+; Moves cursor to the next board position
 NextCursorPosition:
 	inc byte [CursorX]
 	mov al, byte [CursorX]
@@ -43,7 +42,7 @@ NextCursorPosition:
 NextCursorPositionEnd:
 	ret
 
-; Print board
+; Print board 
 PrintBoard:
 	mov word [Counter], 0
 	call ResetCursor
@@ -56,7 +55,7 @@ PrintBoardLoop:
 	
 	call SetCursor
 	
-	mov al, 176
+	mov al, UNDEFUSED
 	call PutChar
 	
 	inc word [Counter]
@@ -66,7 +65,7 @@ PrintBoardLoop:
 PrintBoardEnd:
 	ret
 
-; Plant mines
+; Randomly plant mines
 PlantMines:
 	mov word [Counter], 0
 	mov word [MinesTotal], 0
@@ -105,7 +104,6 @@ PlantMinesContinue:
 	; DEBUG
 	; call GetTile
 	; call PutChar
-	; DEBUG END
 
 	inc word [Counter]
 	call NextCursorPosition
@@ -114,7 +112,169 @@ PlantMinesContinue:
 PlantMinesEnd:
 	ret
 
+; Count offset by current X and Y cursor coordinates to put or get tile
+CountOffset:
+	push eax
+	push ebx
+	push edx
+	
+	movzx eax, byte [CursorY]
+	movzx ebx, byte [BoardSize]
+	mul ebx
+	movzx ebx, byte [CursorX]
+	add eax, ebx
 
+	mov esi, Board
+	add esi, eax
+	
+	pop edx
+	pop ebx
+	pop eax
+	
+	ret
+
+; Put value stored in 'al' to current tile
+PutTile:
+	call CountOffset
+	
+	mov byte [esi], al
+	ret
+
+; Get value from board by current tile
+GetTile:
+	call CountOffset
+
+	mov al, byte [esi]
+	ret
+
+; Count number of mines around current tile
+CountMinesAround:
+	pusha
+	mov byte [Counter], 0
+	
+	mov cl, byte [CursorY]
+	mov ch, byte [CursorX]
+
+TopLeft:
+	dec byte [CursorY]
+	dec byte [CursorX]
+	
+	cmp cl, 0
+	je Top
+	
+	cmp ch, 0
+	je Top
+	
+	call GetTile
+	cmp al, MINE
+	jne Top
+	inc byte [Counter]
+
+Top:
+	inc byte [CursorX]
+	
+	cmp cl, 0
+	je TopRight
+	
+	call GetTile
+	cmp al, MINE
+	jne TopRight
+	inc byte [Counter]
+
+TopRight:
+	inc byte [CursorX]
+	
+	cmp cl, 0
+	je Right
+	
+	mov al, byte [BoardSize]
+	dec al
+	cmp ch, al
+	je Right
+	
+	call GetTile
+	cmp al, MINE
+	jne Right
+	inc byte [Counter]
+
+Right:
+	inc byte [CursorY]
+	
+	mov al, byte [BoardSize]
+	dec al
+	cmp ch, al
+	je BottomRight
+	
+	call GetTile
+	cmp al, MINE
+	jne BottomRight
+	inc byte [Counter]
+
+BottomRight:
+	inc byte [CursorY]
+	
+	mov al, byte [BoardSize]
+	dec al
+	cmp cl, al
+	je Bottom
+	
+	mov al, byte [BoardSize]
+	dec al
+	cmp ch, al
+	je Bottom
+	
+	call GetTile
+	cmp al, MINE
+	jne Bottom
+	inc byte [Counter]
+
+Bottom:
+	dec byte [CursorX]
+	
+	mov al, byte [BoardSize]
+	dec al
+	cmp cl, al
+	je BottomLeft
+	
+	call GetTile
+	cmp al, MINE
+	jne BottomLeft
+	inc byte [Counter]
+
+BottomLeft:
+	dec byte [CursorX]
+	
+	mov al, byte [BoardSize]
+	dec al
+	cmp cl, al
+	je Left
+	
+	cmp ch, 0
+	je Left
+	
+	call GetTile
+	cmp al, MINE
+	jne Left
+	inc byte [Counter]
+
+Left:
+	dec byte [CursorY]
+	
+	cmp ch, 0
+	je CountMinesAroundEnd
+	
+	call GetTile
+	cmp al, MINE
+	jne CountMinesAroundEnd
+	inc byte [Counter]
+
+CountMinesAroundEnd:
+	popa
+	mov al, byte [Counter]
+	add al, '0'
+	ret
+
+; Handle pressed key
 HandleGameInput:
 	cmp al, 'w' ; Check if 'W' key is pressed
 	je MoveCursorUp
@@ -160,175 +320,16 @@ MoveCursorRight:
 	inc byte [CursorX]
 	jmp GameLoop
 
-CountOffset:
-	push eax
-	push ebx
-	push edx
-	
-	movzx eax, byte [CursorY]
-	movzx ebx, byte [BoardSize]
-	mul ebx
-	movzx ebx, byte [CursorX]
-	add eax, ebx
-
-    mov esi, Board
-    add esi, eax
-	
-	pop edx
-	pop ebx
-	pop eax
-	
-	ret
-
-PutTile:
-	call CountOffset
-	
-	mov byte [esi], al
-	ret
-
-GetTile:
-    call CountOffset
-
-    mov al, byte [esi]
-    ret
-
-CountMinesAround:
-	pusha
-	mov byte [Counter], 0
-	
-	mov cl, byte [CursorY]
-	mov ch, byte [CursorX]
-
-	; Top left
-    dec byte [CursorY]
-	dec byte [CursorX]
-	
-	cmp cl, 0
-	je skip1
-	
-	cmp ch, 0
-	je skip1
-	
-    call GetTile
-    cmp al, '*'
-    jne skip1
-	inc byte [Counter]
-skip1:
-    ; Top
-    inc byte [CursorX]
-	
-	cmp cl, 0
-	je skip2
-	
-    call GetTile
-    cmp al, '*'
-    jne skip2
-	inc byte [Counter]
-skip2:
-    ; Top right
-    inc byte [CursorX]
-	
-	cmp cl, 0
-	je skip3
-	
-	mov al, byte [BoardSize]
-	dec al
-	cmp ch, al
-	je skip3
-	
-    call GetTile
-    cmp al, '*'
-    jne skip3
-	inc byte [Counter]
-skip3:
-    ; Right
-    inc byte [CursorY]
-	
-	mov al, byte [BoardSize]
-	dec al
-	cmp ch, al
-	je skip4
-	
-    call GetTile
-    cmp al, '*'
-    jne skip4
-	inc byte [Counter]
-skip4:
-    ; Bottom right
-    inc byte [CursorY]
-	
-	mov al, byte [BoardSize]
-	dec al
-	cmp cl, al
-	je skip5
-	
-	mov al, byte [BoardSize]
-	dec al
-	cmp ch, al
-	je skip5
-	
-    call GetTile
-    cmp al, '*'
-    jne skip5
-	inc byte [Counter]
-skip5:
-    ; Bottom
-    dec byte [CursorX]
-	
-	mov al, byte [BoardSize]
-	dec al
-	cmp cl, al
-	je skip6
-	
-    call GetTile
-    cmp al, '*'
-    jne skip6
-	inc byte [Counter]
-skip6:
-    ; Bottom left
-    dec byte [CursorX]
-	
-	mov al, byte [BoardSize]
-	dec al
-	cmp cl, al
-	je skip7
-	
-	cmp ch, 0
-	je skip8
-	
-    call GetTile
-    cmp al, '*'
-    jne skip7
-	inc byte [Counter]
-skip7:
-    ; Left
-    dec byte [CursorY]
-	
-	cmp ch, 0
-	je skip8
-	
-    call GetTile
-    cmp al, '*'
-    jne skip8
-	inc byte [Counter]
-skip8:
-	popa
-	mov al, byte [Counter]
-	add al, '0'
-	ret
-	
-	
-
 Defuse:
 	mov ah, 0x08 ; BIOS function to read character from screen
-	int 10h      ; Call BIOS interrupt
+	int 10h	  ; Call BIOS interrupt
 	cmp al, 176
 	je DecTilesLeft
 
 DefuseContinue:
 
-    call GetTile
-	cmp al, '*'
+	call GetTile
+	cmp al, MINE
 	je GameOver
 	
 	mov cx, word [MinesTotal]
@@ -353,25 +354,26 @@ DecTilesLeft:
 	dec word [TilesLeft]
 	jmp DefuseContinue
 
-
-
 Win:
 	call ClearScreen
 	call ResetCursor
 	mov si, WinMessage
 	call PrintStringL
 	jmp Result
+
 GameOver:
 	call ClearScreen
 	call ResetCursor
-	mov si, LoseMessage
+	mov si, GameOverMessage
 	call PrintStringL
+
 Result:
 	mov byte [CursorPosition], KEYBOARD_LEGEND_POSITION
 	call SetCursorRow
 	mov si, ResultKeyboardLegend
 	call PrintString
 	call HideCursor
+
 ResultLoop:
 	mov ah, 0 ; Reset AH to read keyboard input
 	int 0x16

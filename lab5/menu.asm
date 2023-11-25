@@ -16,29 +16,28 @@ Logo:
 	db "{__   {_  {__ {__ {__   {_ {__ {__             {__ ", 0
 	db "{__       {__ {__ {__    {_ __ {__       {__    {__", 0
 	db "{__       {__ {__ {__      {__ {________   {__ __  ", 0
+
 ; Menu options
 EasyOption: db "EASY", 0
 MediumOption: db "MEDIUM", 0
 HardOption: db "HARD", 0
-CurrentOption: db ">", 0
-; Keyboard Legend at the bottom of the screen
+
+; Keyboard legend at the bottom of the screen
 MenuKeyboardLegend: db "SWITCH OPTION: W, S | CHOOSE OPTION: ENTER", 0
 
 ; ---CONSTANTS---
-; Number of lines in logo, used for printing
-LOGO_LENGTH equ 7
-; Row number for 'START GAME' option
-FIRST_OPTION_POSITION equ 8
-; Row number for 'QUIT' option
-NUMBER_OF_OPTIONS equ 3
+LOGO_LENGTH equ 7 ; Number of lines in logo
+FIRST_OPTION_POSITION equ 8 ; Y coordinate of 'EASY' option
+NUMBER_OF_OPTIONS equ 3 ; Row number for 'QUIT' option
 
 ; ---VARIABLES---
-Difficulty: db 0
+Difficulty: db 0 ; 0 - EASY, 1 - MEDIUM, 2 - HARD
 
 ; ---PROCEDURES---
 PrintLogo:
 	mov si, Logo
 	mov cx, LOGO_LENGTH
+
 PrintLogoLoop:
 	push cx
 	cld
